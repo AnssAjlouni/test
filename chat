@@ -1,0 +1,483 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:get/get_core/src/get_main.dart';
+import 'package:get/get.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../Config/Config.dart';
+import '../TopBarBack.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'RowLeftMessage.dart';
+import 'RowRightMessage.dart';
+
+class ChatMessages extends StatefulWidget {
+  String user_id = "0";
+
+  ChatMessages({Key? key, required this.user_id}) : super(key: key);
+
+  @override
+  State<ChatMessages> createState() => _ChatMessagesState();
+}
+
+class _ChatMessagesState extends State<ChatMessages> {
+  bool video = false;
+  bool image = false;
+  var data;
+  late Future<List<dynamic>> messages_list = Future.value([]);
+  var _input = new TextEditingController();
+  final chat_controller = ChatController();
+  IO.Socket? socket;
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    getChatDetails();
+  }
+  @override
+  void dispose() {
+    // أغلق الاتصال هنا
+    socket?.destroy();
+    print("disconnect socket");
+    super.dispose();
+  }
+  Future<Map<String, dynamic>> fetchMessages() async {
+    return {};
+    // استدعاء API وجلب البيانات
+    // يمكنك تحديد dynamic كنوع البيانات المرجعة
+  }
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        body: Container(
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Container(
+                  width: MediaQuery.of(context).size.width,
+                  decoration: BoxDecoration(color: Colors.white, boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.5),
+                      spreadRadius: 1,
+                      blurRadius: 3,
+                      offset: Offset(0, 2), // changes position of shadow
+                    ),
+                  ]),
+                  height: 60.0,
+                  child: Center(
+                    child: Stack(
+                      children: [
+                        Positioned(
+                            left: 10,
+                            top: 0,
+                            bottom: 0,
+                            child: Container(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  InkWell(
+                                    onTap: () {
+                                      Get.back();
+                                    },
+                                    child: Image(
+                                      height: 20,
+                                      color: Color(0xff333333),
+                                      image: AssetImage(
+                                          "assets/icons/video_call.png"),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 15,
+                                  ),
+                                  InkWell(
+                                    onTap: () {
+                                      Get.back();
+                                    },
+                                    child: Image(
+                                      height: 27,
+                                      color: Color(0xff333333),
+                                      image:
+                                          AssetImage("assets/icons/phone.png"),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 15,
+                                  ),
+                                  InkWell(
+                                    onTap: () {
+                                      Get.back();
+                                    },
+                                    child: Image(
+                                      height: 35,
+                                      color: Color(0xff333333),
+                                      image:
+                                          AssetImage("assets/icons/back.png"),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )),
+                        Positioned(
+                            right: 10,
+                            top: 0,
+                            bottom: 0,
+                            child: Container(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  ClipRRect(
+                                      borderRadius: BorderRadius.circular(100),
+                                      child: Obx(() => Image(
+                                            image: NetworkImage(
+                                                chat_controller.image.value),
+                                            fit: BoxFit.cover,
+                                            width: 30,
+                                            height: 30,
+                                          ))),
+                                  SizedBox(
+                                    width: 15,
+                                  ),
+                                  Obx(() => Text(
+                                        chat_controller.name.value,
+                                        style: TextStyle(
+                                            color: Color(0xff333333),
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: "tajawal",
+                                            fontSize: 18),
+                                      )),
+                                  Obx(() => chat_controller.verification ==
+                                          "true"
+                                      ? Padding(
+                                          padding: EdgeInsets.only(right: 2),
+                                          child: Image(
+                                            image: AssetImage(
+                                                "assets/icons/verifiyed.png"),
+                                            width: 15,
+                                          ),
+                                        )
+                                      : SizedBox())
+                                ],
+                              ),
+                            ))
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  margin: EdgeInsets.only(top: 60, bottom: 60),
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(20),
+                    height: double.infinity,
+                    child: FutureBuilder(
+                        future: data != null ? Future.value(data) : getMessages("chat_id"),
+                        builder: (context, AsyncSnapshot snapshot) {
+                          if (snapshot.data != null) {
+                            var response = snapshot.data;
+                            return ListView.builder(
+                              reverse: true,
+                              // shrinkWrap: true,
+                              // physics: NeverScrollableScrollPhysics(),
+                              scrollDirection: Axis.vertical,
+                              itemCount: response.length,
+                              itemBuilder:
+                                  (BuildContext context, int index) {
+                                try {
+                                  if(response[index]["i_sent_this"]==true){
+                                    return RowRightMessage(message: response[index]["text"],);
+                                  }else{
+                                    return RowLeftMessage(message: response[index]["text"],);
+                                  }
+                                }catch(error){
+                                  Config.super_dialog(error.toString(), "o", context);
+                                }
+                              },
+                            );
+                          } else {
+                            return Container(
+                              width: double.infinity,
+                              height: MediaQuery.of(context).size.height,
+                              child: Center(
+                                child: SpinKitPulse(
+                                  color: Color(0xff1588FF),
+                                  size: 60,
+                                ),
+                              ),
+                            );
+                          }
+                        }),
+                  ),
+                ),
+                Positioned(bottom: 0, left: 0, right: 0, child: input_search())
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget input_search() {
+    return Container(
+        margin: EdgeInsets.only(left: 10, right: 10, top: 10, bottom: 10),
+        decoration: BoxDecoration(
+            color: Color(0xfff0f0f0), borderRadius: BorderRadius.circular(100)),
+        child: TextFormField(
+          controller: _input,
+          onChanged: (value) {
+            if (value.isEmpty) {
+              chat_controller.update_send(false);
+            } else {
+              chat_controller.update_send(true);
+            }
+          },
+          textDirection: TextDirection.rtl,
+          style: TextStyle(color: Colors.black, fontFamily: "tajawal"),
+          decoration: InputDecoration(
+              hintText: "رسالة...",
+              labelStyle: TextStyle(color: Colors.black),
+              contentPadding: EdgeInsets.only(right: 20),
+              suffixIcon: Padding(
+                padding: EdgeInsets.only(left: 18),
+                child: Container(
+                  width: 130,
+                  child: Obx(
+                    () => chat_controller.show_send.value == "false"
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Image(
+                                width: 22,
+                                image:
+                                    AssetImage("assets/icons/microphone.png"),
+                              ),
+                              SizedBox(
+                                width: 15,
+                              ),
+                              Image(
+                                width: 22,
+                                image: AssetImage("assets/icons/photo.png"),
+                              )
+                            ],
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                                InkWell(
+                                  onTap: () {
+                                    send_message();
+                                  },
+                                  child: Text(
+                                    "إرسال",
+                                    style: TextStyle(
+                                        color: Config.AppColor,
+                                        fontFamily: "tajawal",
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                )
+                              ]),
+                  ),
+                ),
+              ),
+              suffixIconColor: Color(0xff717171),
+              enabled: true,
+              enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0x888444), width: 1)),
+              focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xf0f0f0), width: 1)),
+              hintStyle: TextStyle(color: Color(0xff717171))),
+        ));
+  }
+
+  getChatDetails() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    print("access_token");
+    print(await prefs.getString("access_token").toString());
+
+    // print(prefs.getString("access_token"));
+    try {
+      var response = await http.get(
+          Uri.parse(Config.URL_SHOE_CHAT + widget.user_id + "/show"),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization':
+                'Bearer ${prefs.getString("access_token").toString()}',
+          });
+      var res = jsonDecode(response.body);
+      String name = "", image = "";
+      bool has_story = false;
+      String verification = "false";
+      print("chat details");
+      print(res);
+      if (res["chat_id"] == null) {
+        Config.super_dialog("لم يتم دردشة مسبقا بينكما", "موافق", context);
+      } else {
+
+        getMessages(res["chat_id"].toString());
+        SocketListiner(res["chat_id"].toString());
+
+      }
+      if (res["user"].containsKey('first_name') &&
+          res["user"].containsKey('last_name')) {
+        name = res["user"]["first_name"] + " " + res["user"]["last_name"];
+      }
+
+      if (res["user"].containsKey('profile_picture_url')) {
+        image = res["user"]["profile_picture_url"]["small"];
+      }
+      if (res["user"].containsKey('has_story')) {
+        has_story = res["user"]["has_story"];
+      } else {
+        has_story = false;
+      }
+      if (res["user"].containsKey('verification')) {
+        verification = res["user"]["verification"];
+      } else {
+        verification = "false";
+      }
+      chat_controller.update_user(name, image, has_story, verification);
+      return res;
+      if (res.containsKey('message')) {
+        if (res['message'] == "Unauthenticated") {
+          Config.super_dialog("إنتهت صلاحية الجلسة", "تسجيل الدخول", context);
+          // prefs.setBool("login", false);
+          // prefs.clear();
+          // Navigator.pushReplacement(
+          //     context, MaterialPageRoute(builder: (context) => PhoneScreen()));
+        }
+      }
+      return res;
+    } catch (error) {
+      print(error);
+      return [];
+    }
+    // res.sort((a, b) => a['name'].compareTo(b['name']));
+  }
+
+  Future<void> send_message() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    print("access_token");
+    print(await prefs.getString("access_token").toString());
+    final url = Config.URL_SEND_MESSAGE;
+    final response = await http.post(Uri.parse(url), body: {
+      'text': _input.text,
+      'user_id': widget.user_id,
+    },headers: {
+      'Authorization': 'Bearer ${prefs.getString("access_token").toString()}',
+    });
+
+
+
+    print("add story");
+    print(response);
+    if (response.statusCode == 200) {
+      _input.text="";
+      var data="true";
+      socket?.emit('message', true);
+      setState(() {
+
+      });
+    } else {
+      print('Error while uploading image: ${response.reasonPhrase}');
+    }
+  }
+
+  getMessages(String chat_id) async {
+    print("chat_id");
+    print(chat_id);
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    print("access_token");
+    print(await prefs.getString("access_token").toString());
+
+    // print(prefs.getString("access_token"));
+    try {
+      var response = await http.get(Uri.parse(Config.URL_GET_MESSAGES+"${widget.user_id}/messages"), headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${prefs.getString("access_token").toString()}',
+      });
+      var res = jsonDecode(response.body);
+      print("chat_list");
+      print(res);
+
+
+      return res;
+      if (res.containsKey('message')) {
+        if (res['message'] == "Unauthenticated") {
+          Config.super_dialog("إنتهت صلاحية الجلسة", "تسجيل الدخول", context);
+          // prefs.setBool("login", false);
+          // prefs.clear();
+          // Navigator.pushReplacement(
+          //     context, MaterialPageRoute(builder: (context) => PhoneScreen()));
+        }
+      }
+      return res;
+    } catch (error) {
+      print(error);
+      return [];
+    }
+    // res.sort((a, b) => a['name'].compareTo(b['name']));
+  }
+  SocketListiner(String chat_id) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    socket = IO.io('http://46.101.96.210:8080', <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': true,
+    });
+    socket?.on('connect', (_) {
+      print('connect socket');
+      Map<String, String> data = {
+        "room": chat_id,
+        "access_token":prefs.getString("access_token").toString()
+      };
+      socket?.emit('join', data);
+    });
+
+    socket?.on('connect_error socket', (_) {
+      print('not connect');
+    });
+    socket?.on('user_join', (data) {
+      print("join_user_response");
+      print(data);
+      // اعرض النتيجة هنا
+    });
+    socket?.on('message', (data) {
+      print("new message socket");
+      print(data);
+      // Config.super_dialog("رسالة جديدة", "موافق", context);
+      setState(() {
+        this.data=data;
+      });
+      // اعرض النتيجة هنا
+    });
+  }
+}
+
+class ChatController extends GetxController {
+  var image =
+      'https://seechat.s3.eu-west-2.amazonaws.com/profiles/default.png'.obs;
+  var name = ''.obs;
+  var has_story = false.obs;
+  var verification = "false".obs;
+  var show_send = "false".obs;
+
+  void update_user(
+      String name, String image, bool has_story, String verification) {
+    this.image.value = image;
+    this.name.value = name;
+    this.has_story.value = has_story;
+    this.verification.value = verification;
+  }
+
+  void update_send(bool typing) {
+    if (typing) {
+      show_send.value = "true";
+    } else {
+      show_send.value = "false";
+    }
+  }
+}
